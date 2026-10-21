@@ -27,8 +27,8 @@ Using a modified Discord client violates Discord's Terms of Service. Use it at y
 
 userplugins build from source.
 
-First turn ON *System Settings > Privacy & Security > App Management > Terminal* 
--# (else `pnpm inject` fails with `operation not permitted`). Needs [Node.js](https://nodejs.org) (LTS) + Git.
+First turn ON *System Settings > Privacy & Security > App Management > Terminal
+(else `pnpm inject` fails with `operation not permitted`). Needs [Node.js](https://nodejs.org) (LTS) + Git.
 
 ```bash
 git clone https://github.com/Vendicated/Vencord
