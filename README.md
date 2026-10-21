@@ -22,7 +22,7 @@ For educational purposes only. The author does not condone illegal use. account-
 
 Userplugins build from source.
 
-First turn ON *System Settings → Privacy & Security → App Management → Terminal* 
+First turn ON *System Settings > Privacy & Security > App Management > Terminal* 
 -# (else `pnpm inject` fails with `operation not permitted`). Needs [Node.js](https://nodejs.org) (LTS) + Git.
 
 ```bash
