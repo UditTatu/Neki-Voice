@@ -1,7 +1,8 @@
 # Neki-Voice
-inspired by Drover, built for macbook to alter UDP packets via a vencord Userplugin. (MacOS requires NetworkExtensions Entitlements which are locked behind a paywall)
 
-a Vencord Userplugin that restores Discord voice on networks that block it, from inside Discord requiring no OS-level tools or special permissions.
+inspired by Drover, built for macbook to alter UDP packets via a vencord userplugin. (MacOS requires NetworkExtensions Entitlements which are locked behind a paywall)
+
+a Vencord userplugin that restores Discord voice on networks that block it, from inside Discord requiring no OS-level tools or special permissions.
 
 Discord voice runs over UDP, blockers drop it with Deep Packet Inspection (connects, but no audio). Neki-Voice reroutes the voice connection to a local relay, which leads the real traffic with decoy packets so the DPI waves it through. It can't hear your voice, the relay only forwards encrypted UDP it has no keys for.
 
@@ -12,11 +13,11 @@ The point of doing this *inside* Discord is macOS, where that OS-level approach 
 
 ## does it fix Screen share?
 
-This didn't used to fix screen share but after a simple <n> scale it does, enjoy watching your friends stream.
+Originally the relay only handled the first UDP stream, which meant screen share (a second stream or anything else) was blocked. Neki-Voice now runs a separate relay session for each stream, so screen share works alongside voice. Enjoy watching your friend's stream.
 
 ## Disclaimer
 
-For educational purposes only. The author does not condone illegal use. account-action risk is real. Use at your own risk, you are responsible for using this.
+Using a modified Discord client violates Discord's Terms of Service. Use it at your own risk. You're responsible for any legal or account-related consequences.
 
 ## Requirements
 
@@ -24,7 +25,7 @@ For educational purposes only. The author does not condone illegal use. account-
 
 ## Install (macOS)
 
-Userplugins build from source.
+userplugins build from source.
 
 First turn ON *System Settings > Privacy & Security > App Management > Terminal* 
 -# (else `pnpm inject` fails with `operation not permitted`). Needs [Node.js](https://nodejs.org) (LTS) + Git.
@@ -33,11 +34,13 @@ First turn ON *System Settings > Privacy & Security > App Management > Terminal*
 git clone https://github.com/Vendicated/Vencord
 cd Vencord
 mkdir -p src/userplugins
-git clone https://github.com/<you>/neki-voice src/userplugins/neki-voice
+git clone https://github.com/UditTatu/neki-voice src/userplugins/neki-voice
 pnpm install
 pnpm build
 pnpm inject #discord must be fully closed
 ```
+
+If the git clone fails, download `index.tsx` and `native.ts`, put them in `Vencord/src/userplugins/neki-voice/`, then run `pnpm build` and `pnpm inject`.
 
 Then: Discord > Settings > Vencord > Plugins > enable **Neki-Voice**.
 
@@ -45,10 +48,17 @@ Then: Discord > Settings > Vencord > Plugins > enable **Neki-Voice**.
 
 ## Settings
 
-no settings for now, it works and that is all I could figure out.
+Discord > Settings > Vencord > Plugins > Neki-Voice has one option, **decoys** (on by default). Turn it off to send traffic through the relay without decoy packets, which is useful for A/B testing.
+if `up` climbs but `down` stays at 0, the decoys may not be getting through.
 
 ## Debug
 
-look in Console for `Neki` lines. Relay logs: `cat ~/.nekivoice/relay.log` (`up` climbing, `down` stuck at 0 = server not replying, tune decoys).
+look in Console for `Neki` lines. Relay logs: `cat ~/.nekivoice/relay.log` (`up` climbing, `down` stuck at 0 = server not replying, check decoys via console).
 
-Inspired by [Drover](https://github.com/front9bit/Drover) and Built on for Vencord.
+the Decoys depend on a file called "packet.bin" located at `~/.nekivoice/packet.bin`
+
+Inspired by [Drover](https://github.com/front9bit/Drover) and Built for Vencord.
+
+Neki-Voice is an unofficial plugin. It is not affiliated with or endorsed by Vencord.
+
+By UditTatu and RishitGupta
