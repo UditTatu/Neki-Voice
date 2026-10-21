@@ -1,7 +1,7 @@
 # Neki-Voice
-inspired by Drover, built for macbook to alter UDP packets via a vencord plugin. (MacOS requires NetworkExtensions Entitlements which are locked behind a paywall)
+inspired by Drover, built for macbook to alter UDP packets via a vencord Userplugin. (MacOS requires NetworkExtensions Entitlements which are locked behind a paywall)
 
-a Vencord plugin that restores Discord voice on networks that block it, from inside Discord requiring no OS-level tools or special permissions.
+a Vencord Userplugin that restores Discord voice on networks that block it, from inside Discord requiring no OS-level tools or special permissions.
 
 Discord voice runs over UDP, blockers drop it with Deep Packet Inspection (connects, but no audio). Neki-Voice reroutes the voice connection to a local relay, which leads the real traffic with decoy packets so the DPI waves it through. It can't hear your voice, the relay only forwards encrypted UDP it has no keys for.
 
