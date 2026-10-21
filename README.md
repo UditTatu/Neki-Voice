@@ -9,7 +9,8 @@ While the plugin itself isn't MacOS only and can be used on Windows/Linux on the
 just use [Drover](https://github.com/front9bit/Drover) or a plain UDP pipe.
 
 The point of doing this *inside* Discord is macOS, where that OS-level approach hits the App Management/entitlement wall (99$ per year lol).
-## Note
+
+## does it fix Screen share?
 
 This didn't used to fix screen share but after a simple <n> scale it does, enjoy watching your friends stream.
 
