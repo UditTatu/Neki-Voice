@@ -8,9 +8,15 @@ const Native = VencordNative.pluginHelpers["Neki-Voice"] as PluginNative<typeof 
 const settings = definePluginSettings({
     decoys: {
         type: OptionType.BOOLEAN,
-        description: "Send the Drover decoy packets before the voice handshake (off = relay only, for A/B testing)",
+        description: "Send the Drover decoy packets before the voice handshake (off = relay only)",
         default: true,
         onChange: (value: boolean) => { Native.setDecoys(value).catch(() => { }); }
+    },
+    debugLog: {
+        type: OptionType.BOOLEAN,
+        description: "Write relay logs to ~/.nekivoice/relay.log (off = nothing written to disk)",
+        default: false,
+        onChange: (value: boolean) => { Native.setLogging(value).catch(() => { }); }
     }
 });
 
@@ -111,7 +117,7 @@ function wrap(ws: WebSocket): WebSocket {
 
 export default definePlugin({
     name: "Neki-Voice",
-    description: "Reroutes Discord voice through a local relay that leads with decoy packets to beat UDP voice blocking. Made by Nekimo.",
+    description: "Reroutes Discord voice through a local relay that leads UDP with decoy packets.",
     authors: [{ name: "Nekimo", id: 693803001571442709n }],
     settings,
 
@@ -127,6 +133,7 @@ export default definePlugin({
     async start() {
         console.log("Neki : Main system activating Dumbass Mode");
         try {
+            await Native.setLogging(settings.store.debugLog).catch(() => { });
             relayPort = await Native.startRelay();
             console.log(`Neki : relay up on 127.0.0.1:${relayPort}`);
         } catch (e) {
@@ -155,6 +162,7 @@ export default definePlugin({
             OriginalWebSocket = null;
         }
         Native.stopRelay().catch(() => { });
+        relayPort = 0;
         lastData = null;
         lastRewrite = null;
         console.log("Neki : system down");

@@ -46,6 +46,40 @@ Then: Discord > Settings > Vencord > Plugins > enable **Neki-Voice**.
 
 **Update:** `git pull` in both repos, `pnpm build`, then `Cmd+R` in Discord (inject is only needed on initial).
 
+## Install (Windows)
+
+why? [Drover](https://github.com/hdrover/discord-drover) already exists and is the better pick on Windows but if you want it anyway...
+
+same deal, userplugins build from source. Needs [Node.js](https://nodejs.org) (LTS) + [Git](https://git-scm.com), no App Management nonsense here.
+
+Get pnpm once with `npm i -g pnpm`, then open **Git Bash** (comes with Git, right click a folder > *Open Git Bash here*):
+
+```bash
+git clone https://github.com/Vendicated/Vencord
+cd Vencord
+mkdir -p src/userplugins
+git clone https://github.com/UditTatu/neki-voice src/userplugins/neki-voice
+pnpm install
+pnpm build
+pnpm inject #discord must be fully closed
+```
+
+`pnpm inject` asks which Discord to patch, pick the one you actually use (Stable/PTB/Canary).
+
+Then: Discord > Settings > Vencord > Plugins > enable **Neki-Voice**.
+
+Your files live in `%USERPROFILE%\.nekivoice\` instead of `~/.nekivoice/`, so that's where `packet.bin` goes and where `relay.log` shows up.
+
+**Update:** same as macOS, `Ctrl+R` instead of `Cmd+R`.
+
+## Install (Linux)
+
+literally the macOS steps minus the App Management part, run them in your normal terminal. Get pnpm with `npm i -g pnpm` first if you don't have it.
+
+If Discord is installed system wide (`/opt`, `/usr/share`) `pnpm inject` might ask for `sudo`.
+
+Files are in `~/.nekivoice/` like on macOS.
+
 ## Settings
 
 Discord > Settings > Vencord > Plugins > Neki-Voice has one option, **decoys** (on by default). Turn it off to send traffic through the relay without decoy packets, which is useful for A/B testing.
