@@ -7,7 +7,7 @@ a Vencord userplugin that restores Discord voice on networks that block it, from
 Discord voice runs over UDP, blockers drop it with Deep Packet Inspection (connects, but no audio). Neki-Voice reroutes the voice connection to a local relay, which leads the real traffic with decoy packets so the DPI waves it through. It can't hear your voice, the relay only forwards encrypted UDP it has no keys for.
 
 While the plugin itself isn't MacOS only and can be used on Windows/Linux on them OS-level tools work without a fight. I am listing better alternatives below.
-just use [Drover](https://github.com/front9bit/Drover) or a plain UDP pipe.
+just use [Drover](https://github.com/hdrover/discord-drover) or a plain UDP pipe.
 
 The point of doing this *inside* Discord is macOS, where that OS-level approach hits the App Management/entitlement wall (99$ per year lol).
 
@@ -57,7 +57,7 @@ look in Console for `Neki` lines. Relay logs: `cat ~/.nekivoice/relay.log` (`up`
 
 the Decoys depend on a file called "packet.bin" located at `~/.nekivoice/packet.bin`
 
-Inspired by [Drover]([https://github.com/front9bit/Drover](https://github.com/hdrover/discord-drover)) and Built for Vencord.
+Inspired by [Drover](https://github.com/hdrover/discord-drover) and Built for Vencord.
 
 Neki-Voice is an unofficial plugin. It is not affiliated with or endorsed by Vencord.
 
