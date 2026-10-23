@@ -21,7 +21,9 @@ Using a modified Discord client violates Discord's Terms of Service. Use it at y
 
 ## Requirements
 
-[Node.js](https://nodejs.org) (LTS) + Git.
+[Node.js](https://nodejs.org)
+[Git](https://git-scm.com)
+[pnpm](https://pnpm.io) (install with `npm i -g pnpm`)
 
 ## Install (macOS)
 
