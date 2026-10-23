@@ -23,6 +23,8 @@ Using a modified Discord client violates Discord's Terms of Service. Use it at y
 
 [Node.js](https://nodejs.org) (LTS) + Git.
 
+Vencord built from [source](https://docs.vencord.dev/installing/).
+
 ## Install (macOS)
 
 userplugins build from source.
@@ -82,8 +84,11 @@ Files are in `~/.nekivoice/` like on macOS.
 
 ## Settings
 
-Discord > Settings > Vencord > Plugins > Neki-Voice has one option, **decoys** (on by default). Turn it off to send traffic through the relay without decoy packets, which is useful for A/B testing.
+Discord > Settings > Vencord > Plugins > Neki-Voice has two options
+**decoys** (on by default). Turn it off to send traffic through the relay without decoy packets, which is useful for A/B testing.
 if `up` climbs but `down` stays at 0, the decoys may not be getting through.
+
+ **Debug log** (off by default) writes relay logs to `~/.nekivoice/relay.log`, capped at 1MB. leave it off unless something's broken, nothing gets written to disk otherwise.
 
 ## Debug
 
