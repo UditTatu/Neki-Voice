@@ -21,8 +21,8 @@ Using a modified Discord client violates Discord's Terms of Service. Use it at y
 
 ## Requirements
 
-[Node.js](https://nodejs.org)
-[Git](https://git-scm.com)
+[Node.js](https://nodejs.org) (LTS)<br>
+[Git](https://git-scm.com)<br>
 [pnpm](https://pnpm.io) (install with `npm i -g pnpm`)
 
 Vencord built from [source](https://docs.vencord.dev/installing/).
