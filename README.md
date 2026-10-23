@@ -57,7 +57,7 @@ look in Console for `Neki` lines. Relay logs: `cat ~/.nekivoice/relay.log` (`up`
 
 the Decoys depend on a file called "packet.bin" located at `~/.nekivoice/packet.bin`
 
-Inspired by [Drover](https://github.com/front9bit/Drover) and Built for Vencord.
+Inspired by [Drover]([https://github.com/front9bit/Drover](https://github.com/hdrover/discord-drover)) and Built for Vencord.
 
 Neki-Voice is an unofficial plugin. It is not affiliated with or endorsed by Vencord.
 
