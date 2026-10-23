@@ -13,8 +13,10 @@ const STATS_MS = 3000;
 const IDLE_MS = 30000;
 
 function log(line: string) {
+    if (!loggingEnabled) return;
     try {
         fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+        try { if (fs.statSync(LOG_FILE).size > 1_000_000) fs.unlinkSync(LOG_FILE); } catch { }
         fs.appendFileSync(LOG_FILE, `${new Date().toISOString()}  ${line}\n`);
     } catch { }
 }
@@ -31,6 +33,8 @@ interface Session {
     down: number;
     gotReply: boolean;
     lastSeen: number;
+    loggedUp: number;
+    loggedDown: number;
 }
 
 interface Held {
@@ -38,11 +42,13 @@ interface Held {
     address: string;
     port: number;
     packets: Buffer[];
+    since: number;
 }
 
 let loopback: dgram.Socket | null = null;
 let loopbackPort = 0;
 let decoysEnabled = true;
+let loggingEnabled = false;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
 let idleTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -57,11 +63,17 @@ export async function setDecoys(_: IpcMainInvokeEvent, enabled: boolean): Promis
     decoysEnabled = enabled;
 }
 
+export async function setLogging(_: IpcMainInvokeEvent, enabled: boolean): Promise<void> {
+    loggingEnabled = enabled;
+}
+
 function sendPrelude(sock: dgram.Socket, ip: string, port: number) {
     try {
         const data = fs.readFileSync(PACKET_FILE);
         if (data.length > 0) sock.send(data, port, ip);
-    } catch { }
+    } catch { 
+        log(`no packet.bin at ${PACKET_FILE}, sending minimal decoys only`);
+    }
     sock.send(Buffer.from([0x00]), port, ip);
     sock.send(Buffer.from([0x01]), port, ip);
 }
@@ -114,8 +126,11 @@ function bindSession(s: Session, address: string, port: number) {
 
 function closeSession(s: Session) {
     try { s.egress.close(); } catch { }
-    sessionsBySsrc.delete(s.ssrc);
-    if (s.discordSrc) sessionsBySrc.delete(srcKey(s.discordSrc.address, s.discordSrc.port));
+    if (sessionsBySsrc.get(s.ssrc) === s) sessionsBySsrc.delete(s.ssrc);
+    if (s.discordSrc) {
+        const key = srcKey(s.discordSrc.address, s.discordSrc.port);
+        if (sessionsBySrc.get(key) === s) sessionsBySrc.delete(key);
+    }
     if (pendingBySsrc.get(s.ssrc) === s) pendingBySsrc.delete(s.ssrc);
     log(`session closed ssrc ${s.ssrc}`);
 }
@@ -135,7 +150,7 @@ function handleClientPacket(data: Buffer, rinfo: dgram.RemoteInfo) {
             return;
         }
         let held = unmatched.get(key);
-        if (!held) { held = { ssrc, address: rinfo.address, port: rinfo.port, packets: [] }; unmatched.set(key, held); }
+        if (!held) { held = { ssrc, address: rinfo.address, port: rinfo.port, packets: [], since: Date.now() }; unmatched.set(key, held); }
         if (held.packets.length < MAX_BUFFER) held.packets.push(data);
         return;
     }
@@ -166,7 +181,10 @@ export async function startRelay(_: IpcMainInvokeEvent): Promise<number> {
 
     statsTimer = setInterval(() => {
         for (const s of sessionsBySsrc.values()) {
-            if (s.up || s.down) log(`relaying ssrc ${s.ssrc}: up=${s.up} down=${s.down}`);
+            if (s.up === s.loggedUp && s.down === s.loggedDown) continue;
+            s.loggedUp = s.up;
+            s.loggedDown = s.down;
+            log(`relaying ssrc ${s.ssrc}: up=${s.up} down=${s.down}`);
         }
     }, STATS_MS);
 
@@ -175,8 +193,11 @@ export async function startRelay(_: IpcMainInvokeEvent): Promise<number> {
         for (const s of [...sessionsBySsrc.values()]) {
             if (now - s.lastSeen > IDLE_MS) closeSession(s);
         }
+        for (const s of [...pendingBySsrc.values()]) {
+            if (now - s.lastSeen > IDLE_MS) closeSession(s);
+        }
         for (const [key, h] of [...unmatched]) {
-            if (h.packets.length === 0) unmatched.delete(key);
+            if (now - h.since > IDLE_MS) unmatched.delete(key);
         }
     }, IDLE_MS);
 
@@ -195,7 +216,8 @@ export async function setTarget(_: IpcMainInvokeEvent, ssrc: number, ip: string,
         ssrc, target: { ip, port }, egress,
         discordSrc: null, queue: [],
         preludeStarted: false, forwarding: false,
-        up: 0, down: 0, gotReply: false, lastSeen: Date.now()
+        up: 0, down: 0, gotReply: false, lastSeen: Date.now(),
+        loggedUp: 0, loggedDown: 0
     };
 
     egress.on("message", (data, rinfo) => {
