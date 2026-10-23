@@ -76,11 +76,7 @@ Your files live in `%USERPROFILE%\.nekivoice\` instead of `~/.nekivoice/`, so th
 
 ## Install (Linux)
 
-literally the macOS steps minus the App Management part, run them in your normal terminal. Get pnpm with `npm i -g pnpm` first if you don't have it.
-
-If Discord is installed system wide (`/opt`, `/usr/share`) `pnpm inject` might ask for `sudo`.
-
-Files are in `~/.nekivoice/` like on macOS.
+I am not sure, I don't have a Linux machine available to test.
 
 ## Settings
 
