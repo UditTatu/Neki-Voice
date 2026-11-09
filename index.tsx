@@ -143,15 +143,12 @@ export default definePlugin({
         const Original = window.WebSocket;
         OriginalWebSocket = Original;
 
-        const Wrapped = function (this: any, url: string | URL, protocols?: string | string[]) {
-            return wrap(new Original(url, protocols));
-        } as unknown as typeof WebSocket;
-
-        Wrapped.prototype = Original.prototype;
-        (Wrapped as any).CONNECTING = Original.CONNECTING;
-        (Wrapped as any).OPEN = Original.OPEN;
-        (Wrapped as any).CLOSING = Original.CLOSING;
-        (Wrapped as any).CLOSED = Original.CLOSED;
+        const Wrapped = class extends Original {
+            constructor(url: string | URL, protocols?: string | string[]) {
+                super(url, protocols);
+                wrap(this);
+            }
+        };
 
         window.WebSocket = Wrapped;
     },
