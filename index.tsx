@@ -1,7 +1,7 @@
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import type { PluginNative } from "@utils/types";
-import { Forms } from "@webpack/common";
+import { Paragraph } from "@components/Paragraph";
 
 const Native = VencordNative.pluginHelpers["Neki-Voice"] as PluginNative<typeof import("./native")>;
 
@@ -123,10 +123,10 @@ export default definePlugin({
 
     settingsAboutComponent: () => (
         <>
-            <Forms.FormText>Neki-Voice, A hello beyond bullshit restrictions.</Forms.FormText>
-            <Forms.FormText style={{ marginTop: 8, fontStyle: "italic" }}>
+            <Paragraph>Neki-Voice, A hello beyond bullshit restrictions.</Paragraph>
+            <Paragraph style={{ marginTop: 8, fontStyle: "italic" }}>
                 Made by Nekimo.
-            </Forms.FormText>
+            </Paragraph>
         </>
     ),
 

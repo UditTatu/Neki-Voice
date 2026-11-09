@@ -19,6 +19,10 @@ Originally the relay only handled the first UDP stream, which meant screen share
 
 Using a modified Discord client violates Discord's Terms of Service. Use it at your own risk. You're responsible for any legal or account-related consequences.
 
+## Update Note
+
+Vencord apparently dropped support for `forms` on 25th October which made the plugin break Discord entirely upon update, it has been fixed as of 9/11/2026.
+
 ## Requirements
 
 [Node.js](https://nodejs.org) (LTS)<br>
