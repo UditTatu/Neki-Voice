@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent } from "electron";
+import crypto from "crypto";
 import dgram from "dgram";
 import fs from "fs";
 import os from "os";
@@ -19,6 +20,11 @@ function log(line: string) {
         try { if (fs.statSync(LOG_FILE).size > 1_000_000) fs.unlinkSync(LOG_FILE); } catch { }
         fs.appendFileSync(LOG_FILE, `${new Date().toISOString()}  ${line}\n`);
     } catch { }
+}
+
+function reportError(context: string, err: unknown) {
+    console.error(`[Neki-Voice] ${context}:`, err);
+    log(`ERROR ${context}: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 interface Session {
@@ -47,7 +53,10 @@ interface Held {
 
 let loopback: dgram.Socket | null = null;
 let loopbackPort = 0;
-let decoysEnabled = true;
+type DecoyMode = "both" | "packet" | "bytes" | "off";
+let decoyMode: DecoyMode = "both";
+let decoyHost = "www.google.com";
+let preludeDelayMs = PRELUDE_DELAY_MS;
 let loggingEnabled = false;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
 let idleTimer: ReturnType<typeof setInterval> | null = null;
@@ -59,23 +68,144 @@ const unmatched = new Map<string, Held>();
 
 function srcKey(address: string, port: number) { return `${address}|${port}`; }
 
-export async function setDecoys(_: IpcMainInvokeEvent, enabled: boolean): Promise<void> {
-    decoysEnabled = enabled;
+export async function setDecoyOptions(_: IpcMainInvokeEvent, mode: DecoyMode, host: string, delayMs: number): Promise<void> {
+    decoyMode = ["both", "packet", "bytes", "off"].includes(mode) ? mode : "both";
+    decoyHost = host?.trim() || "www.google.com";
+    preludeDelayMs = Number.isFinite(delayMs) ? Math.min(Math.max(delayMs, 0), 1000) : PRELUDE_DELAY_MS;
+}
+
+export async function getStats(_: IpcMainInvokeEvent, ssrc: number): Promise<{ up: number; down: number; } | null> {
+    const s = sessionsBySsrc.get(ssrc) || pendingBySsrc.get(ssrc);
+    return s ? { up: s.up, down: s.down } : null;
 }
 
 export async function setLogging(_: IpcMainInvokeEvent, enabled: boolean): Promise<void> {
     loggingEnabled = enabled;
 }
 
-function sendPrelude(sock: dgram.Socket, ip: string, port: number) {
+const QUIC_V1_SALT = Buffer.from("38762cf7f55934b34d179ae6a4c80cadccbb7f0a", "hex");
+const QUIC_DATAGRAM_LEN = 1200;
+
+const u8 = (n: number) => Buffer.from([n]);
+const u16 = (n: number) => Buffer.from([n >> 8, n & 0xff]);
+const vec8 = (b: Buffer) => Buffer.concat([u8(b.length), b]);
+const vec16 = (b: Buffer) => Buffer.concat([u16(b.length), b]);
+
+function varint(n: number) {
+    if (n < 0x40) return u8(n);
+    if (n < 0x4000) return u16(0x4000 | n);
+    const b = Buffer.alloc(4);
+    b.writeUInt32BE((0x80000000 | n) >>> 0);
+    return b;
+}
+
+function hkdfExpandLabel(secret: Buffer, label: string, length: number) {
+    const info = Buffer.concat([u16(length), vec8(Buffer.from(`tls13 ${label}`)), u8(0)]);
+    return crypto.createHmac("sha256", secret).update(info).update(u8(1)).digest().subarray(0, length);
+}
+
+function buildClientHello(host: string) {
+    const ext = (type: number, body: Buffer) => Buffer.concat([u16(type), vec16(body)]);
+    const param = (id: number, value: Buffer) => Buffer.concat([varint(id), varint(value.length), value]);
+
+    const transportParams = Buffer.concat([
+        param(0x01, varint(30_000)),
+        param(0x03, varint(1472)),
+        param(0x04, varint(15_728_640)),
+        param(0x05, varint(6_291_456)),
+        param(0x06, varint(6_291_456)),
+        param(0x07, varint(6_291_456)),
+        param(0x08, varint(100)),
+        param(0x09, varint(100)),
+        param(0x0f, Buffer.alloc(0))
+    ]);
+
+    const extensions = Buffer.concat([
+        ext(0x0000, vec16(Buffer.concat([u8(0), vec16(Buffer.from(host, "ascii"))]))),
+        ext(0x000a, vec16(Buffer.concat([u16(0x001d), u16(0x0017), u16(0x0018)]))),
+        ext(0x000d, vec16(Buffer.concat([0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501].map(u16)))),
+        ext(0x0010, vec16(vec8(Buffer.from("h3")))),
+        ext(0x002b, vec8(u16(0x0304))),
+        ext(0x002d, vec8(u8(1))),
+        ext(0x0033, vec16(Buffer.concat([u16(0x001d), vec16(crypto.randomBytes(32))]))),
+        ext(0x0039, transportParams)
+    ]);
+
+    const body = Buffer.concat([
+        u16(0x0303),
+        crypto.randomBytes(32),
+        u8(0),
+        vec16(Buffer.concat([u16(0x1301), u16(0x1302), u16(0x1303)])),
+        vec8(u8(0)),
+        vec16(extensions)
+    ]);
+
+    return Buffer.concat([u8(1), u8(0), u16(body.length), body]);
+}
+function buildQuicInitial(host: string) {
+    const dcid = crypto.randomBytes(8);
+    const pnLen = 4;
+
+    const initialSecret = crypto.createHmac("sha256", QUIC_V1_SALT).update(dcid).digest();
+    const clientSecret = hkdfExpandLabel(initialSecret, "client in", 32);
+    const key = hkdfExpandLabel(clientSecret, "quic key", 16);
+    const iv = hkdfExpandLabel(clientSecret, "quic iv", 12);
+    const hp = hkdfExpandLabel(clientSecret, "quic hp", 16);
+
+    const hello = buildClientHello(host);
+    const cryptoFrame = Buffer.concat([u8(0x06), varint(0), varint(hello.length), hello]);
+
+    const headerLen = 1 + 4 + 1 + dcid.length + 1 + 1 + 2;
+    const payloadLen = QUIC_DATAGRAM_LEN - headerLen - pnLen - 16;
+    if (cryptoFrame.length > payloadLen) throw new Error("decoy host name is too long");
+    const payload = Buffer.alloc(payloadLen);
+    cryptoFrame.copy(payload);
+
+    const header = Buffer.concat([
+        u8(0xc0 | (pnLen - 1)),
+        Buffer.from([0, 0, 0, 1]),
+        vec8(dcid),
+        u8(0),
+        u8(0),
+        varint(pnLen + payloadLen + 16),
+        Buffer.alloc(pnLen)
+    ]);
+
+    const cipher = crypto.createCipheriv("aes-128-gcm", key, iv);
+    cipher.setAAD(header);
+    const sealed = Buffer.concat([cipher.update(payload), cipher.final(), cipher.getAuthTag()]);
+
+    const mask = crypto.createCipheriv("aes-128-ecb", hp, null).update(sealed.subarray(0, 16));
+    header[0] ^= mask[0] & 0x0f;
+    for (let i = 0; i < pnLen; i++) header[header.length - pnLen + i] ^= mask[1 + i];
+
+    return Buffer.concat([header, sealed]);
+}
+
+function loadDecoyPacket(): Buffer | null {
     try {
         const data = fs.readFileSync(PACKET_FILE);
-        if (data.length > 0) sock.send(data, port, ip);
-    } catch { 
-        log(`no packet.bin at ${PACKET_FILE}, sending minimal decoys only`);
+        if (data.length > 0) return data;
+    } catch (e: any) {
+        if (e?.code !== "ENOENT") reportError(`couldn't read ${PACKET_FILE}`, e);
     }
-    sock.send(Buffer.from([0x00]), port, ip);
-    sock.send(Buffer.from([0x01]), port, ip);
+    try {
+        return buildQuicInitial(decoyHost);
+    } catch (e) {
+        reportError("couldn't build the decoy packet", e);
+        return null;
+    }
+}
+
+function sendPrelude(sock: dgram.Socket, ip: string, port: number) {
+    if (decoyMode === "both" || decoyMode === "packet") {
+        const packet = loadDecoyPacket();
+        if (packet) sock.send(packet, port, ip);
+    }
+    if (decoyMode === "both" || decoyMode === "bytes") {
+        sock.send(Buffer.from([0x00]), port, ip);
+        sock.send(Buffer.from([0x01]), port, ip);
+    }
 }
 
 function maybeStartPrelude(s: Session) {
@@ -85,7 +215,7 @@ function maybeStartPrelude(s: Session) {
 
     s.preludeStarted = true;
     sendPrelude(s.egress, s.target.ip, s.target.port);
-    log(`prelude → ${s.target.ip}:${s.target.port} (ssrc ${s.ssrc})`);
+    log(`prelude (${decoyMode}, ${preludeDelayMs}ms) → ${s.target.ip}:${s.target.port} (ssrc ${s.ssrc})`);
 
     setTimeout(() => {
         if (sessionsBySsrc.get(s.ssrc) !== s) return;
@@ -95,13 +225,13 @@ function maybeStartPrelude(s: Session) {
         for (const b of rest) { s.egress.send(b, s.target.port, s.target.ip); s.up++; }
         s.queue = [];
         s.forwarding = true;
-    }, PRELUDE_DELAY_MS);
+    }, preludeDelayMs);
 }
 
 function feed(s: Session, data: Buffer) {
     s.lastSeen = Date.now();
 
-    if (!decoysEnabled) {
+    if (decoyMode === "off") {
         s.forwarding = true;
         s.egress.send(data, s.target.port, s.target.ip);
         s.up++;
@@ -170,7 +300,7 @@ export async function startRelay(_: IpcMainInvokeEvent): Promise<number> {
         sock.once("error", onErr);
         sock.bind(0, "127.0.0.1", () => {
             sock.off("error", onErr);
-            sock.on("error", () => { });
+            sock.on("error", e => reportError("relay socket error", e));
             resolve();
         });
     });
@@ -210,7 +340,7 @@ export async function setTarget(_: IpcMainInvokeEvent, ssrc: number, ip: string,
 
     const family: dgram.SocketType = ip.includes(":") ? "udp6" : "udp4";
     const egress = dgram.createSocket(family);
-    egress.on("error", () => { });
+    egress.on("error", e => reportError(`socket error (ssrc ${ssrc})`, e));
 
     const s: Session = {
         ssrc, target: { ip, port }, egress,
@@ -231,10 +361,16 @@ export async function setTarget(_: IpcMainInvokeEvent, ssrc: number, ip: string,
             log(`first reply ssrc ${s.ssrc} from ${rinfo.address}:${rinfo.port}`);
         }
     });
-    try { egress.bind(); } catch { }
+    const bound = new Promise<void>((resolve, reject) => {
+        egress.once("error", reject);
+        egress.bind(0, () => {
+            egress.off("error", reject);
+            resolve();
+        });
+    });
 
     pendingBySsrc.set(ssrc, s);
-    log(`target ssrc ${ssrc} → ${ip}:${port}  decoys=${decoysEnabled ? "ON" : "OFF"}`);
+    log(`target ssrc ${ssrc} → ${ip}:${port}  decoys=${decoyMode}`);
 
     for (const [key, held] of unmatched) {
         if (held.ssrc === ssrc) {
@@ -243,6 +379,14 @@ export async function setTarget(_: IpcMainInvokeEvent, ssrc: number, ip: string,
             unmatched.delete(key);
             break;
         }
+    }
+
+    try {
+        await bound;
+    } catch (e) {
+        reportError(`couldn't open a socket for ssrc ${ssrc}`, e);
+        closeSession(s);
+        throw e;
     }
 }
 
